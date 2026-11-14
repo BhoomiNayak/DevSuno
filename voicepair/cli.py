@@ -594,6 +594,9 @@ def cmd_chat(args) -> int:
            "Ctrl+C to exit[/dim]\n")
 
     turn = 0
+    session_findings: list[dict] = []   # {check, file} per bug found
+    session_stt_calls = 0
+    session_tts_calls = 0
     try:
         while True:
             turn += 1
@@ -645,6 +648,7 @@ def cmd_chat(args) -> int:
                 _print(console, "[dim]  (no speech detected, try again)[/dim]\n")
                 continue
 
+            session_stt_calls += 1   # STT succeeded
             if last_lang[0]:
                 _print(console, f"[dim]  detected: {last_lang[0]}[/dim]")
 
@@ -658,6 +662,13 @@ def cmd_chat(args) -> int:
             # --- Print answer panel ---------------------------------------
             _answer_panel(console, answer)
 
+            # Track bug findings for session summary
+            if answer.get("check") not in ("no-pattern-matched", None):
+                session_findings.append({
+                    "check": answer["check"],
+                    "file": getattr(args, "file", "") or "git diff",
+                })
+
             # --- TTS: Timbre SSE, no file saved ---------------------------
             spoken = llm.speakable_text(answer)
             _print(console, "[cyan]🔊  Speaking…[/cyan]", end="")
@@ -665,6 +676,7 @@ def cmd_chat(args) -> int:
                 from .tts_stream import speak_ephemeral
                 speak_ephemeral(spoken, voice=args.voice,
                                 answer=answer, expressive=True)
+                session_tts_calls += 1
             except Exception as exc:
                 import tempfile, os as _os
                 _print(console,
@@ -677,6 +689,7 @@ def cmd_chat(args) -> int:
                               answer=answer, expressive=True)
                     _play_if_possible(Path(tmp_path), console)
                     _os.unlink(tmp_path)
+                    session_tts_calls += 1
                 except Exception as e2:
                     _print(console, f"[red]TTS failed: {e2}[/red]")
 
@@ -684,7 +697,46 @@ def cmd_chat(args) -> int:
             _print(console, "")
 
     except KeyboardInterrupt:
-        _print(console, "\n\n[dim]Chat ended. Bye![/dim]")
+        # --- Session summary ------------------------------------------------
+        _rule(console, "[bold cyan]Session Summary[/bold cyan]")
+        try:
+            from rich.table import Table
+            from rich.panel import Panel
+            from rich.text import Text
+
+            t = Table.grid(padding=(0, 2))
+            t.add_column(style="dim", no_wrap=True)
+            t.add_column(style="bold white")
+
+            t.add_row("Questions asked", str(turn))
+
+            bugs = [(s["check"], s["file"]) for s in session_findings]
+            if bugs:
+                bug_lines = "\n".join(
+                    f"{c}  [dim]({f})[/dim]" for c, f in bugs
+                )
+                t.add_row("Bugs found",
+                          Text.from_markup(f"{len(bugs)}\n{bug_lines}"))
+            else:
+                t.add_row("Bugs found", "0 — koi issue nahi mila")
+
+            t.add_row("Prisma STT calls",
+                      str(session_stt_calls) + "  [dim](Gnani Prisma v3)[/dim]")
+            t.add_row("Timbre TTS calls",
+                      str(session_tts_calls) + "  [dim](Gnani Timbre v3)[/dim]")
+
+            console.print(Panel(
+                t,
+                title="[bold cyan]DevSuno Chat — Session Summary[/bold cyan]",
+                border_style="cyan",
+            ))
+        except Exception:
+            print(f"\nSession: {turn} question(s), "
+                  f"{len(session_findings)} bug(s) found, "
+                  f"{session_stt_calls} STT call(s), "
+                  f"{session_tts_calls} TTS call(s).")
+
+        _print(console, "[dim]Bye![/dim]")
         return 0
 
 
