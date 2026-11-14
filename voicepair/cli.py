@@ -386,6 +386,25 @@ def cmd_ask(args) -> int:
 
     _answer_panel(console, answer)
 
+    # --- Auto-fix -----------------------------------------------------------
+    if getattr(args, "fix", False) or getattr(args, "force_fix", False):
+        if args.file and answer.get("check") != "no-pattern-matched":
+            from .fixer import apply_fix
+            _print(console, "\n[bold cyan]Auto-fix[/bold cyan]")
+            confirm = not getattr(args, "force_fix", False)
+            ok, msg = apply_fix(
+                args.file, answer,
+                confirm=confirm,
+                console=console,
+            )
+            if ok:
+                _print(console, f"[bold green]✓[/bold green] {msg}")
+                # Speak the fix confirmation
+                answer["what_wrong"] = msg
+                answer["check"] = "success"
+            else:
+                _print(console, f"[yellow]{msg}[/yellow]")
+
     # TTS
     _save_and_speak(answer, Path(args.out), args.voice, args.play,
                     console, stream_tts=getattr(args, "stream_tts", False))
@@ -785,6 +804,24 @@ def cmd_scan(args) -> int:
         except Exception:
             print(f"Top fix: {worst['what_wrong']}")
 
+    # --- Auto-fix top finding -----------------------------------------------
+    if findings and (getattr(args, "fix", False) or getattr(args, "force_fix", False)):
+        worst = findings[0]
+        fix_path = root / worst["file"]
+        if fix_path.exists():
+            from .fixer import apply_fix
+            _print(console, "\n[bold cyan]Auto-fix — top priority finding[/bold cyan]")
+            confirm = not getattr(args, "force_fix", False)
+            ok, msg = apply_fix(
+                fix_path, worst,
+                confirm=confirm,
+                console=console,
+            )
+            if ok:
+                _print(console, f"[bold green]✓[/bold green] {msg}")
+            else:
+                _print(console, f"[yellow]{msg}[/yellow]")
+
     # --- Spoken summary (Timbre TTS) ----------------------------------------
     if args.voice:
         try:
@@ -896,6 +933,11 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Timbre SSE streaming: audio plays as chunks arrive.")
     ask.add_argument("--play", action="store_true",
                      help="Play the spoken answer after saving.")
+    ask.add_argument("--fix", action="store_true",
+                     help="Auto-write the fix to the source file. Shows a diff "
+                          "and asks for confirmation before writing.")
+    ask.add_argument("--force-fix", action="store_true", dest="force_fix",
+                     help="Apply --fix without asking for confirmation.")
     ask.set_defaults(func=cmd_ask)
 
     # -- review --------------------------------------------------------------
@@ -971,6 +1013,14 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument(
         "--play", action="store_true",
         help="Play the spoken summary after saving.",
+    )
+    scan.add_argument(
+        "--fix", action="store_true",
+        help="Auto-fix the top-priority finding. Shows diff + asks confirmation.",
+    )
+    scan.add_argument(
+        "--force-fix", action="store_true", dest="force_fix",
+        help="Apply --fix without asking for confirmation.",
     )
     scan.set_defaults(func=cmd_scan)
 
