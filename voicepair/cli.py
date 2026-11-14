@@ -662,6 +662,34 @@ def cmd_chat(args) -> int:
 
 
 # ---------------------------------------------------------------------------
+# watch  — real-time file-save watcher
+# ---------------------------------------------------------------------------
+
+def cmd_watch(args) -> int:
+    """Watch a directory and speak bug warnings the moment a file is saved."""
+    console = _get_console()
+
+    if args.voice:
+        try:
+            stt.require_api_key()
+        except MissingApiKeyError as exc:
+            _print(console,
+                   f"[bold red]Error:[/bold red] {exc} (--voice requires GNANI_API_KEY)")
+            return 2
+
+    _rule(console, "[bold green]DevSuno — watch[/bold green]")
+
+    from .watcher import run_watch
+    run_watch(
+        watch_dir=args.dir,
+        voice=args.voice,
+        voice_name=args.voice_name,
+        speak_clean=args.speak_clean,
+    )
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # scan  — whole-directory static analysis with spoken summary
 # ---------------------------------------------------------------------------
 
@@ -945,6 +973,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Play the spoken summary after saving.",
     )
     scan.set_defaults(func=cmd_scan)
+
+    # -- watch ---------------------------------------------------------------
+    watch = sub.add_parser(
+        "watch",
+        help=(
+            "Watch a directory for file saves. Speaks a bug warning the "
+            "moment a buggy save is detected. Ctrl+C to stop."
+        ),
+    )
+    watch.add_argument(
+        "--dir", default=".",
+        help="Directory to watch (default: current directory).",
+    )
+    watch.add_argument(
+        "--voice", action="store_true",
+        help="Speak bug warnings via Timbre TTS on every buggy save.",
+    )
+    watch.add_argument(
+        "--voice-name", default=tts.DEFAULT_VOICE, dest="voice_name",
+        help=f"Timbre voice (default {tts.DEFAULT_VOICE}).",
+    )
+    watch.add_argument(
+        "--speak-clean", action="store_true", dest="speak_clean",
+        help="Also speak a 'clean' message when a saved file has no issues.",
+    )
+    watch.set_defaults(func=cmd_watch)
 
     return parser
 
