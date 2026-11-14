@@ -152,8 +152,11 @@ _SECRET_VAR_RE = re.compile(
     r"""(?xi)
     (?:^|\b)
     (?P<var>
-        password | passwd | pwd | secret | api[_\-]?key | apikey |
-        auth[_\-]?token | token | access[_\-]?key | private[_\-]?key |
+        password | passwd | pwd |
+        (?:\w+_)?secret(?:_\w+)? |   # jwt_secret, app_secret, secret_key, etc.
+        api[_\-]?key | apikey |
+        auth[_\-]?token | (?:\w+_)?token |
+        access[_\-]?key | private[_\-]?key |
         db[_\-]?pass(?:word)? | database[_\-]?password |
         aws[_\-]?secret | stripe[_\-]?key | sendgrid[_\-]?key
     )
@@ -169,32 +172,65 @@ _PLACEHOLDER_RE = re.compile(
 
 
 def _hardcoded_secret(code: str, _question: str = "") -> dict | None:
-    """Find a password, API key, or token assigned as a string literal."""
+    """Find passwords, API keys, or tokens assigned as string literals.
+
+    Reports the most severe finding — API keys and tokens take priority
+    over generic passwords because they are directly exploitable.
+    """
+    findings: list[dict] = []
+
     for m in _SECRET_VAR_RE.finditer(code):
         value = m.group("value")
         if _PLACEHOLDER_RE.match(value):
             continue
-        # Skip very short values (likely test/debug values like "x" or "1")
         if len(value) < 6:
             continue
         var = m.group("var")
         masked = value[:4] + "*" * max(0, len(value) - 4)
-        return {
-            "what_wrong": (
-                f"'{var}' is assigned a hardcoded string value "
-                f"(`{masked}`) directly in source code. "
-                "Anyone with access to this file — or the git history — "
-                "can read this credential."
-            ),
-            "fix": (
-                f"Move the value to an environment variable and read it at runtime: "
-                f"`{var} = os.getenv('{var.upper()}')`. "
-                "Add the real value to `.env` (never commit `.env`)."
-            ),
-            "corrected_line": f"{var} = os.getenv('{var.upper()}')",
-            "check": "hardcoded-secret",
-        }
-    return None
+        findings.append({
+            "var": var,
+            "masked": masked,
+            "line": code[:m.start()].count("\n") + 1,
+        })
+
+    if not findings:
+        return None
+
+    # Severity: api_key / token > password
+    def _severity(f):
+        v = f["var"].lower()
+        if any(k in v for k in ("api", "key", "token", "secret", "jwt")):
+            return 0
+        return 1
+
+    findings.sort(key=_severity)
+    worst = findings[0]
+
+    if len(findings) == 1:
+        what_wrong = (
+            f"'{worst['var']}' is assigned a hardcoded string value "
+            f"(`{worst['masked']}`) directly in source code. "
+            "Anyone with access to this file — or the git history — "
+            "can read this credential immediately."
+        )
+    else:
+        all_vars = ", ".join(f"'{f['var']}'" for f in findings)
+        what_wrong = (
+            f"{len(findings)} hardcoded credentials found: {all_vars}. "
+            f"Most critical: '{worst['var']}' (`{worst['masked']}`). "
+            "These are readable by anyone with git access."
+        )
+
+    return {
+        "what_wrong": what_wrong,
+        "fix": (
+            f"Move every secret to environment variables. "
+            f"For '{worst['var']}': `{worst['var']} = os.getenv('{worst['var'].upper()}')`. "
+            "Store real values in `.env` (gitignored), never in source code."
+        ),
+        "corrected_line": f"{worst['var']} = os.getenv('{worst['var'].upper()}')",
+        "check": "hardcoded-secret",
+    }
 
 
 def _unclosed_file(code: str, _question: str = "") -> dict | None:

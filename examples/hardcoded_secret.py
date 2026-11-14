@@ -2,10 +2,8 @@
 
 Bug: credentials are written directly as string literals. Anyone who
 reads this file — a teammate, a code reviewer, anyone with git access,
-or anyone who finds the repo public — can steal these credentials and
-use them immediately.
-
-The git history also permanently records them even after deletion.
+or anyone who finds the repo public — can read these credentials
+immediately. The git history also records them permanently.
 
 The fix: move all secrets to environment variables and read them at
 runtime with os.getenv(). Store the actual values in .env (gitignored).
@@ -16,18 +14,24 @@ Demo question to speak (Hinglish):
 """
 import hashlib
 import hmac
+import os
 
 
-# Configuration
+# Configuration — these are fine (not secrets)
 DATABASE_HOST = "db.internal.company.com"
 DATABASE_PORT = 5432
 DATABASE_NAME = "users_production"
 
-# Bug: real credentials hardcoded as string literals
-DATABASE_PASSWORD = "Sup3rS3cur3Passw0rd!"       # <-- hardcoded password
-STRIPE_API_KEY    = "sk_live_EXAMPLE_FAKE_KEY_DO_NOT_USE"  # <-- fake key (demo only)
-JWT_SECRET        = "myverysecretjwtsigningkey123"       # <-- signing secret
-SENDGRID_API_KEY  = "SG.EXAMPLE_FAKE_KEY_DO_NOT_USE"    # <-- fake key (demo only)
+# Bug: credentials hardcoded as string literals
+# (values below are intentionally fake — for demo purposes only)
+DATABASE_PASSWORD = "Sup3rS3cur3Passw0rd!"   # <-- hardcoded password
+JWT_SECRET        = "jwt-signing-key-2026"    # <-- hardcoded signing secret
+API_KEY           = "gnani-api-key-demoonly"  # <-- hardcoded API key
+
+# The fix looks like this:
+# DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD")
+# JWT_SECRET        = os.getenv("JWT_SECRET")
+# API_KEY           = os.getenv("API_KEY")
 
 
 def create_jwt_token(user_id: int) -> str:
@@ -36,12 +40,11 @@ def create_jwt_token(user_id: int) -> str:
     return f"{payload}.{sig.hexdigest()}"
 
 
-def charge_customer(amount_paise: int, card_token: str) -> dict:
-    """Charge a customer via Stripe."""
-    import urllib.request, json
-    headers = {
-        "Authorization": f"Bearer {STRIPE_API_KEY}",
-        "Content-Type": "application/x-www-form-urlencoded",
-    }
-    # ... rest of the charge logic
-    return {"status": "charged", "amount": amount_paise}
+def get_db_connection():
+    """Connect to the database using the hardcoded password."""
+    import urllib.parse
+    conn_str = (
+        f"postgresql://admin:{DATABASE_PASSWORD}"
+        f"@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}"
+    )
+    return conn_str  # password visible in connection string logs
