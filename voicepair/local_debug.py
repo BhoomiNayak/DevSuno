@@ -508,3 +508,130 @@ def summarise_trace(raw_trace: str) -> dict:
         "exception": exc_type,
         "backend": "local-trace",
     }
+
+
+# ---------------------------------------------------------------------------
+# Directory scanner  (used by ``devsuno scan``)
+# ---------------------------------------------------------------------------
+
+# File extensions to scan
+_SCAN_EXTENSIONS = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rb"}
+
+# Directories to always skip
+_SKIP_DIRS = {
+    "__pycache__", ".git", ".venv", "venv", "node_modules",
+    "dist", "build", ".eggs", "*.egg-info", ".mypy_cache",
+    ".pytest_cache", ".tox", "coverage", ".next", ".nuxt",
+}
+
+# Severity order for sorting (lower = more critical)
+_SEVERITY = {
+    "hardcoded-secret":      0,
+    "bare-except":           1,
+    "python-none-guard":     2,
+    "unclosed-file":         3,
+    "mutable-default-arg":   4,
+    "off-by-one-bound":      5,
+    "off-by-one-next-element": 6,
+    "no-pattern-matched":    99,
+}
+
+
+def scan_directory(
+    root: "Path",
+    max_files: int = 200,
+) -> list[dict]:
+    """Scan every source file under ``root`` and return all findings.
+
+    Parameters
+    ----------
+    root:
+        Directory to scan recursively.
+    max_files:
+        Safety cap — stop after this many files so a huge monorepo
+        doesn't take forever.
+
+    Returns
+    -------
+    list[dict]
+        Each finding dict contains:
+          ``file``      relative path string
+          ``check``     check name
+          ``what_wrong`` one-sentence description
+          ``fix``       one-sentence fix
+          ``corrected_line``
+          ``backend``   always "local-fallback"
+        Sorted by severity (critical first), then by file path.
+    """
+    from pathlib import Path as _Path
+
+    findings: list[dict] = []
+    scanned = 0
+
+    for path in sorted(_Path(root).rglob("*")):
+        if scanned >= max_files:
+            break
+        # Skip unwanted directories
+        if any(part in _SKIP_DIRS for part in path.parts):
+            continue
+        if path.suffix.lower() not in _SCAN_EXTENSIONS:
+            continue
+        if not path.is_file():
+            continue
+
+        try:
+            code = path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+
+        scanned += 1
+        result = analyse("scan", code)
+
+        if result["check"] == "no-pattern-matched":
+            continue
+
+        rel = str(path.relative_to(root)) if path.is_relative_to(root) else str(path)
+        finding = dict(result)
+        finding["file"] = rel
+        findings.append(finding)
+
+    # Sort: severity first, then filename
+    findings.sort(key=lambda f: (_SEVERITY.get(f["check"], 99), f["file"]))
+    return findings
+
+
+def scan_summary_text(findings: list[dict], root_name: str = "") -> str:
+    """Build a short spoken summary of scan findings for Timbre TTS."""
+    if not findings:
+        return (
+            f"{'Scan of ' + root_name + ' complete. ' if root_name else ''}"
+            "Koi issue nahi mila. Codebase clean hai!"
+        )
+
+    total = len(findings)
+    critical = [f for f in findings if _SEVERITY.get(f["check"], 99) <= 1]
+
+    # Group by check type for the summary
+    from collections import Counter
+    counts = Counter(f["check"] for f in findings)
+    top = counts.most_common(3)
+    top_str = ", ".join(f"{v} {k.replace('-', ' ')}" for k, v in top)
+
+    if critical:
+        worst = critical[0]
+        spoken = (
+            f"{total} issue{'s' if total > 1 else ''} mile "
+            f"{'in ' + root_name if root_name else ''}. "
+            f"Sabse critical: {worst['file']} mein {worst['check'].replace('-', ' ')}. "
+            f"{worst['what_wrong'][:120]} "
+            f"Types: {top_str}."
+        )
+    else:
+        spoken = (
+            f"{total} issue{'s' if total > 1 else ''} mile "
+            f"{'in ' + root_name if root_name else ''}. "
+            f"Koi critical security issue nahi hai. "
+            f"Types: {top_str}."
+        )
+
+    return spoken[:600]

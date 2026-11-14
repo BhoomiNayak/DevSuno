@@ -214,19 +214,14 @@ def _get_audio_path(args, console) -> Path:
 
 def _play_if_possible(path: Path, console) -> None:
     try:
-        import sounddevice as sd
         import soundfile as sf
-    except Exception:
-        _print(console,
-               f"[dim](Tip: play the answer with any audio player: {path})[/dim]")
-        return
-    try:
+        import sounddevice as sd
         data, rate = sf.read(str(path), dtype="int16")
-        sd.play(data, rate)
+        sd.play(data, samplerate=rate)
         sd.wait()
     except Exception as exc:
         _print(console,
-               f"[dim](Could not play audio: {exc}. File: {path})[/dim]")
+               f"[dim](Tip: play the answer with any audio player: {path})[/dim]")
 
 
 def _transcribe(audio_path: Path, code: str, console) -> tuple[str, str]:
@@ -667,7 +662,136 @@ def cmd_chat(args) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Parser
+# scan  — whole-directory static analysis with spoken summary
+# ---------------------------------------------------------------------------
+
+def cmd_scan(args) -> int:
+    """Scan an entire directory for bugs and speak a prioritised report."""
+    console = _get_console()
+
+    from .local_debug import scan_directory, scan_summary_text
+
+    root = Path(args.dir).resolve()
+    if not root.is_dir():
+        _print(console, f"[bold red]Error:[/bold red] Not a directory: {root}")
+        return 2
+
+    _rule(console, "[bold yellow]DevSuno — scan[/bold yellow]")
+    _print(console,
+           f"[dim]Scanning [cyan]{root}[/cyan] "
+           f"(max {args.max_files} files)…[/dim]")
+
+    # --- Scan ---------------------------------------------------------------
+    with _spinner(console, "[yellow]Scanning files…[/yellow]"):
+        findings = scan_directory(root, max_files=args.max_files)
+
+    # --- Results table ------------------------------------------------------
+    if not findings:
+        _print(console,
+               "\n[bold green]✓ Clean![/bold green] "
+               "No issues found across all scanned files.")
+    else:
+        try:
+            from rich.table import Table
+            from rich.panel import Panel
+            from rich.text import Text
+
+            # Severity colour map
+            _colours = {
+                "hardcoded-secret":       "bold red",
+                "bare-except":            "red",
+                "python-none-guard":      "yellow",
+                "unclosed-file":          "yellow",
+                "mutable-default-arg":    "dim yellow",
+                "off-by-one-bound":       "cyan",
+                "off-by-one-next-element":"cyan",
+            }
+
+            table = Table(
+                title=f"[bold yellow]{len(findings)} issue(s) found in "
+                      f"{root.name}[/bold yellow]",
+                show_header=True,
+                header_style="bold white",
+                border_style="yellow",
+                show_lines=True,
+            )
+            table.add_column("#",         style="dim",        width=3)
+            table.add_column("File",      style="cyan",       no_wrap=True)
+            table.add_column("Check",     style="bold",       width=22)
+            table.add_column("What is wrong", no_wrap=False,  min_width=30)
+
+            for i, f in enumerate(findings, 1):
+                colour = _colours.get(f["check"], "white")
+                table.add_row(
+                    str(i),
+                    f["file"],
+                    Text(f["check"], style=colour),
+                    f["what_wrong"][:90] + ("…" if len(f["what_wrong"]) > 90 else ""),
+                )
+            console.print(table)
+        except Exception:
+            # Plain fallback
+            for i, f in enumerate(findings, 1):
+                print(f"[{i}] {f['file']:40} {f['check']:25} {f['what_wrong'][:60]}")
+
+        # Detailed panel for the most critical finding
+        worst = findings[0]
+        _print(console, "")
+        try:
+            from rich.panel import Panel
+            from rich.table import Table
+            t = Table.grid(padding=(0, 1))
+            t.add_column(style="bold red", no_wrap=True)
+            t.add_column()
+            t.add_row("Most critical", f"[cyan]{worst['file']}[/cyan]")
+            t.add_row("Check", worst["check"])
+            t.add_row("What is wrong", worst["what_wrong"])
+            t.add_row("Fix", worst["fix"])
+            if worst.get("corrected_line"):
+                t.add_row("Corrected line", worst["corrected_line"])
+            console.print(Panel(
+                t,
+                title="[bold red]Top Priority Fix[/bold red]",
+                border_style="red",
+            ))
+        except Exception:
+            print(f"Top fix: {worst['what_wrong']}")
+
+    # --- Spoken summary (Timbre TTS) ----------------------------------------
+    if args.voice:
+        try:
+            stt.require_api_key()
+        except MissingApiKeyError as exc:
+            _print(console,
+                   f"[bold red]Error:[/bold red] {exc} (--voice requires GNANI_API_KEY)")
+            return 2
+
+        summary_text = scan_summary_text(findings, root_name=root.name)
+        _print(console,
+               f"\n[cyan]🔊  Speaking scan summary…[/cyan]")
+
+        # Build a fake answer dict so expression tags work
+        answer = {
+            "what_wrong": summary_text,
+            "fix": "",
+            "check": "hardcoded-secret" if findings and findings[0]["check"] == "hardcoded-secret" else (
+                "success" if not findings else "bare-except"
+            ),
+            "backend": "local-fallback",
+        }
+
+        out_path = Path(args.out)
+        _save_and_speak(
+            answer, out_path, args.voice_name,
+            play=args.play, console=console,
+            expressive=True, stream_tts=False,
+        )
+
+    return 0 if not findings else 1   # exit 1 so CI pipelines can act on findings
+
+
+# ---------------------------------------------------------------------------
+# build_parser
 # ---------------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -787,6 +911,40 @@ def build_parser() -> argparse.ArgumentParser:
     trace.add_argument("--out", default="out/trace.wav")
     trace.add_argument("--play", action="store_true")
     trace.set_defaults(func=cmd_trace)
+
+    # -- scan ----------------------------------------------------------------
+    scan = sub.add_parser(
+        "scan",
+        help=(
+            "Scan an entire directory for bugs. "
+            "Produces a prioritised Rich table + optional spoken summary."
+        ),
+    )
+    scan.add_argument(
+        "--dir", default=".",
+        help="Directory to scan (default: current directory).",
+    )
+    scan.add_argument(
+        "--max-files", type=int, default=200, dest="max_files",
+        help="Maximum files to scan (default 200).",
+    )
+    scan.add_argument(
+        "--voice", action="store_true",
+        help="Speak the scan summary via Timbre TTS after scanning.",
+    )
+    scan.add_argument(
+        "--voice-name", default=tts.DEFAULT_VOICE, dest="voice_name",
+        help=f"Timbre voice for --voice output (default {tts.DEFAULT_VOICE}).",
+    )
+    scan.add_argument(
+        "--out", default="out/scan_summary.wav",
+        help="Spoken summary output path.",
+    )
+    scan.add_argument(
+        "--play", action="store_true",
+        help="Play the spoken summary after saving.",
+    )
+    scan.set_defaults(func=cmd_scan)
 
     return parser
 
