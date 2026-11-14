@@ -329,11 +329,13 @@ def _save_and_speak(answer: dict, out_path: Path, voice: str,
 def cmd_ask(args) -> int:
     console = _get_console()
 
-    try:
-        stt.require_api_key()
-    except MissingApiKeyError as exc:
-        _print(console, f"[bold red]Error:[/bold red] {exc}")
-        return 2
+    # --text skips Prisma STT entirely — no API key needed for STT
+    if not getattr(args, "text", None):
+        try:
+            stt.require_api_key()
+        except MissingApiKeyError as exc:
+            _print(console, f"[bold red]Error:[/bold red] {exc}")
+            return 2
 
     _rule(console, "[bold cyan]DevSuno — ask[/bold cyan]")
 
@@ -351,8 +353,14 @@ def cmd_ask(args) -> int:
     else:
         raise SystemExit("Provide code context: --file <code-file> or --diff.")
 
-    # STT — live WebSocket or batch WAV
-    if getattr(args, "live", False):
+    # STT — typed text, live WebSocket, or batch WAV
+    if getattr(args, "text", None):
+        transcript = args.text.strip()
+        detected = ""
+        _print(console,
+               f"\n[bold yellow]Question:[/bold yellow] {transcript}")
+        _print(console, "[dim]  (typed input — Prisma STT skipped)[/dim]")
+    elif getattr(args, "live", False):
         try:
             transcript, detected = _live_transcribe(code, console)
         except SystemExit:
@@ -910,6 +918,10 @@ def build_parser() -> argparse.ArgumentParser:
                          help="Ask a debugging question by voice.")
     ask.add_argument("--audio",
                      help="Recorded question file (WAV/MP3/FLAC, max 30s).")
+    ask.add_argument("--text", default=None,
+                     help="Type your question instead of speaking — skips Prisma STT. "
+                          "Still calls Timbre TTS for the spoken answer. "
+                          "Example: --text \"null check kyun miss ho gaya\"")
     ask.add_argument("--record", action="store_true",
                      help="Record from the microphone.")
     ask.add_argument("--seconds", type=float, default=8,
