@@ -1,231 +1,169 @@
-# DevSuno — Audio-Native Terminal Copilot
+# DevSuno — Voice-First Terminal Debugger for Indian Developers
 
 > **Speak your bug in Hinglish. Hear the fix.**
 
-DevSuno is a voice-first debugging copilot that lives in your terminal. Indian developers already debug out loud — *"bro null check kyun miss ho gaya"*, *"ye loop last element pe crash kyun kar raha hai"* — but every coding tool only takes typed English. DevSuno meets you in the language you actually think in.
-
-Built for the **Gnani Great Indian AI Internship Challenge** by **Bhoomi Prashanth Nayak**.
+Built for the **Gnani Great Indian AI Internship Challenge** by **Bhoomi Prashanth Nayak** (solo entry).
 
 ---
 
-## Demo
+## The Problem
 
-```
-╭──────────────────────────────────────────────────────────────────────╮
-│  ██████╗ ███████╗██╗   ██╗███████╗██╗   ██╗███╗   ██╗ ██████╗       │
-│  ██╔══██╗██╔════╝██║   ██║██╔════╝██║   ██║████╗  ██║██╔═══██╗      │
-│  ██║  ██║█████╗  ██║   ██║███████╗██║   ██║██╔██╗ ██║██║   ██║      │
-│  ██║  ██║██╔══╝  ╚██╗ ██╔╝╚════██║██║   ██║██║╚██╗██║██║   ██║      │
-│  ██████╔╝███████╗ ╚████╔╝ ███████║╚██████╔╝██║ ╚████║╚██████╔╝      │
-│                                                                      │
-│  🎙  Speak bugs in Hinglish. Gnani Prisma v3 STT + Timbre v3 TTS    │
-│  v0.1.0  |  chat  ask  review  trace  |  Ctrl+C to exit             │
-╰──────────────────────────────────────────────────────────────────────╯
-```
+Indian developers debug out loud in Hinglish.
+
+> *"bro null check kyun miss ho gaya"*
+> *"ye loop last element pe crash kyun kar raha hai"*
+> *"is function mein exception silently swallow ho rahi hai kya"*
+
+Every coding tool only takes typed English. Nobody built a debugger that speaks your language — until now.
 
 ---
 
-## What It Does
+## What DevSuno Does
 
-You speak a debugging question naturally in Hinglish. DevSuno:
+DevSuno is a voice-first terminal copilot. You speak about your code in Hinglish. It finds the bug. It speaks the fix back — with emotion.
 
-1. **Hears you** — Gnani Prisma v3.0 STT transcribes your Hinglish speech with `indic-auto` language detection and `codemix` output format
-2. **Finds the bug** — a static analyser reads the code you pointed at and identifies the issue
-3. **Speaks the fix** — Gnani Timbre v3.0 TTS speaks the answer back with expressive audio tags (`<sigh>` on crashes, `<excited>` on clean fixes)
+```
+You speak (Hinglish / Kannada / English — any mix)
+        ↓
+Gnani Prisma v3.0 STT
+  indic-auto  ·  codemix format  ·  200 dynamic workspace keyterms
+        ↓
+Static analyser finds the bug in the code you pointed at
+        ↓
+Gnani Timbre v3.0 TTS
+  Avinash voice  ·  hi-IN  ·  <sigh> on crashes  ·  <excited> on fixes
+        ↓
+Terminal panel + spoken answer
+```
 
 No browser. No chat window. Just your terminal, your voice, your language.
 
 ---
 
-## Architecture
+## Live Web Demo
 
-```
-┌─────────────────────────┐
-│  Developer speaks       │
-│  (Hinglish / Kannada /  │
-│   English — any mix)    │
-└────────────┬────────────┘
-             │  mic audio (PCM)
-             ▼
-┌─────────────────────────┐
-│  Gnani Prisma v3.0 STT  │
-│  • indic-auto detection │
-│  • codemix format       │
-│  • 200 workspace        │
-│    keyterms boosted     │
-│  • REST or Realtime WS  │
-└────────────┬────────────┘
-             │  transcript (Hinglish)
-             ▼
-┌─────────────────────────┐
-│  Local Static Analyser  │
-│  • hardcoded secret     │
-│  • bare except          │
-│  • missing None guard   │
-│  • unclosed file        │
-│  • mutable default arg  │
-│  • off-by-one loop      │
-│  • stack trace reader   │
-└────────────┬────────────┘
-             │  structured answer
-             ▼
-┌─────────────────────────┐
-│  Gnani Timbre v3.0 TTS  │
-│  • Avinash voice        │
-│  • hi-IN language       │
-│  • expression tags      │
-│    <sigh> / <excited>   │
-│  • REST or SSE stream   │
-└────────────┬────────────┘
-             │
-             ▼
-┌─────────────────────────┐
-│  Terminal output        │
-│  + spoken answer        │
-│  (Rich panel + audio)   │
-└─────────────────────────┘
-```
-
----
-
-## Features
-
-| Feature | Description |
-|---|---|
-| **Hinglish STT** | Prisma v3.0 with `indic-auto` — handles Hindi, Kannada, English, and any mix |
-| **Dynamic keyterms** | Extracts function names, class names, git filenames from your workspace and boosts them in Prisma |
-| **Expressive TTS** | Timbre v3.0 expression tags: `<sigh>` on critical bugs, `<excited>` on successful fixes |
-| **Realtime STT** | `--live` flag: words appear as you speak via Prisma WebSocket |
-| **SSE streaming TTS** | Audio starts playing ~300ms after synthesis begins |
-| **Conversational chat** | `devsuno chat` — continuous loop, no files saved, pure voice conversation |
-| **6 bug patterns** | Hardcoded secrets, bare except, None guard, unclosed file, mutable default, off-by-one |
-| **Stack trace reader** | `devsuno trace` — pipe stderr, hear the root cause in Hinglish |
-| **Git diff review** | `devsuno review` — speak what to look for, hear issues in uncommitted changes |
-| **Rich terminal UI** | Syntax-highlighted panels, spinners, answer cards |
-
----
-
-## Commands
+Try it without installing anything — judges open the URL, pick a code snippet, type a question in Hinglish, hear Timbre speak the fix.
 
 ```bash
-# Conversational mode — speak, hear fix, speak again. No files saved.
+# Run locally
+uvicorn server:app --host 127.0.0.1 --port 8765
+# open http://127.0.0.1:8765
+```
+
+Deploy free to Render in 5 minutes using the included `render.yaml`.
+
+---
+
+## Gnani APIs Used
+
+| API | How |
+|---|---|
+| **Prisma v3.0 REST STT** | Transcribes Hinglish questions from recorded or mic audio |
+| **Prisma v3.0 Realtime WebSocket STT** | `--live` flag — words appear on screen as the developer speaks |
+| **Timbre v3.0 REST TTS** | Speaks the fix with Avinash voice in `hi-IN` (Hinglish) |
+| **Timbre v3.0 SSE Streaming TTS** | Audio starts playing in ~300ms via `--stream-tts` and `chat` mode |
+| **Timbre expression tags** | `<sigh>` on critical bugs, `<excited>` on clean code |
+| **indic-auto language detection** | Handles Hindi, Kannada, English, any mix automatically |
+| **keyterms boosting (200 terms)** | Function names, class names, git filenames extracted from workspace |
+| **topic hint** | Contextual sentence sent with every STT request for jargon accuracy |
+
+---
+
+## 7 Commands
+
+```bash
+# Continuous voice conversation — speak, hear fix, speak again
 devsuno chat --file your_code.py
 
-# One question about a file
-devsuno ask --audio question.wav --file your_code.py --play
-
-# Live realtime STT (words appear as you speak)
-devsuno ask --live --file your_code.py --stream-tts
-
-# Record from mic
+# One question, one spoken answer (voice, mic, or typed)
 devsuno ask --record --seconds 8 --file your_code.py --play
+devsuno ask --live --file your_code.py --stream-tts
+devsuno ask --text "null check kyun miss ho gaya" --file main.py --play
 
-# Review uncommitted changes by voice
+# Find the bug AND write the fix into the file
+devsuno ask --text "password hardcode ho gaya" --file auth.py --fix
+
+# Scan entire directory — spoken audit report
+devsuno scan --dir src/ --voice --play
+
+# Watch for file saves — speaks the moment a bug is introduced
+devsuno watch --dir src/ --voice
+
+# Speak what to look for in uncommitted git changes
 devsuno review --audio review.wav
 
-# Pipe a crash and hear the root cause
+# Pipe a crash — hear the root cause in Hinglish
 python your_script.py 2>&1 | devsuno trace --voice --play
 ```
 
 ---
 
-## Tech Stack
+## 7 Bug Patterns Detected
 
-| Component | Technology |
+| Check | What it catches |
 |---|---|
-| **Speech-to-Text** | Gnani Prisma v3.0 — `indic-auto`, `codemix`, keyterms, topic hint |
-| **Text-to-Speech** | Gnani Timbre v3.0 — Avinash voice, `hi-IN`, audio expression tags |
-| **Realtime STT** | `GnaniSTTStreamClient` WebSocket — live per-utterance transcripts |
-| **Streaming TTS** | `GnaniTTSStreamClient` SSE — chunked audio playback |
-| **SDK** | `gnani-vachana >= 0.9.0` |
-| **Terminal UI** | `rich >= 13.0` — panels, spinners, syntax highlighting |
-| **Audio I/O** | `sounddevice`, `soundfile`, `numpy` |
-| **Language** | Python 3.10+ |
+| `hardcoded-secret` | Passwords, API keys, JWT tokens as string literals — finds ALL in one scan |
+| `bare-except` | `except:` that swallows every error silently |
+| `python-none-guard` | Parameter indexed or iterated with no None check |
+| `unclosed-file` | `open()` called outside a `with` block |
+| `mutable-default-arg` | `def foo(items=[])` — shared state across calls |
+| `off-by-one-bound` | `i <= arr.length` reads one past the last element |
+| `local-trace` | Stack trace root cause, library/framework frames stripped |
 
 ---
 
-## Bug Patterns Detected
+## Auto-Fix (`--fix`)
 
-| Check | What it catches | Example |
-|---|---|---|
-| `hardcoded-secret` | passwords, API keys, tokens as string literals | `API_KEY = "sk-live-..."` |
-| `bare-except` | `except:` that swallows every error silently | `except: return None` |
-| `python-none-guard` | parameter indexed with no None check | `scores[0]` without `if scores is None` |
-| `unclosed-file` | `open()` outside a `with` block | `f = open(path)` |
-| `mutable-default-arg` | list/dict/set as default argument | `def foo(items=[])` |
-| `off-by-one-bound` | `<= length` loop bound | `i <= arr.length` |
-| `local-trace` | stack trace root cause, library noise stripped | any Python traceback |
+DevSuno writes the corrected code back to your file. Shows a colour diff, asks confirmation, backs up the original.
+
+```diff
+# Before
+DATABASE_PASSWORD = "Sup3rS3cur3Passw0rd!"
+JWT_SECRET        = "jwt-signing-key-2026"
+
+# After  (devsuno ask --fix)
+import os
+DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD")
+JWT_SECRET        = os.getenv("JWT_SECRET")
+```
 
 ---
 
 ## Setup
 
-### Requirements
-
-- Python 3.10+
-- A Gnani API key — create one free at [app.gnani.ai/voice/api-keys](https://app.gnani.ai/voice/api-keys)
-- Microphone (for `--record` and `--live` modes)
-
-### Install
+**Requirements:** Python 3.10+, a free Gnani API key from [app.gnani.ai/voice/api-keys](https://app.gnani.ai/voice/api-keys)
 
 ```bash
-# Clone the repo
-git clone https://github.com/<your-username>/devsuno.git
-cd devsuno
+git clone https://github.com/BhoomiNayak/DevSuno.git
+cd DevSuno
 
-# Create a virtual environment
 python -m venv .venv
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # macOS / Linux
 
-# Activate it
-# Windows:
-.venv\Scripts\activate
-# macOS/Linux:
-source .venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Install the devsuno command
 pip install -e .
-```
 
-### Configure
-
-```bash
 cp .env.example .env
+# open .env and paste your GNANI_API_KEY
 ```
 
-Open `.env` and replace `PASTE_YOUR_GNANI_API_KEY_HERE` with your key:
-
-```
-GNANI_API_KEY=your_key_here
-```
-
-That's the only change needed. The key covers both Prisma STT and Timbre TTS.
-
-### Verify
-
+**Verify (no audio, zero API calls):**
 ```bash
-# Check everything works (no API calls)
 python test_api.py
-
-# Full pipeline test with a recorded audio file
-python test_api.py --audio question.wav --file examples/null_check.py
 ```
 
 ---
 
 ## Example Files
 
-Six buggy snippets — one per check family:
-
-| File | Bug | Suggested Hinglish question |
+| File | Bug | Hinglish question |
 |---|---|---|
-| `examples/null_check.py` | Missing None guard on `scores` | *"bro check karo is array me null check kyun miss ho gaya"* |
-| `examples/off_by_one.js` | `i <= arr.length` loop | *"ye loop last element pe kyun undefined de raha hai"* |
-| `examples/bare_except.py` | Silent `except:` swallows errors | *"bro ye function kabhi error nahi deta lekin result galat aata hai"* |
-| `examples/hardcoded_secret.py` | `DATABASE_PASSWORD = "..."` | *"bro is code mein password hardcode toh nahi kar diya"* |
-| `examples/unclosed_file.py` | `f = open(...)` without `with` | *"bro ye file operations sahi se close ho rahi hain ya leak hai"* |
+| `examples/null_check.py` | Missing None guard | *"bro check karo is array me null check kyun miss ho gaya"* |
+| `examples/off_by_one.js` | `i <= arr.length` | *"ye loop last element pe kyun undefined de raha hai"* |
+| `examples/bare_except.py` | Silent `except:` | *"bro ye function kabhi error nahi deta lekin result galat aata hai"* |
+| `examples/hardcoded_secret.py` | Hardcoded credentials | *"bro is code mein password hardcode toh nahi kar diya"* |
+| `examples/unclosed_file.py` | File handle leak | *"bro ye file operations sahi se close ho rahi hain ya leak hai"* |
 | `examples/mutable_default.py` | `def foo(cart=[])` | *"bro purana data kyun aa raha hai list khali honi chahiye thi"* |
 
 ---
@@ -233,48 +171,61 @@ Six buggy snippets — one per check family:
 ## Project Structure
 
 ```
-devsuno/
+DevSuno/
 ├── voicepair/
-│   ├── cli.py           # CLI — chat, ask, review, trace subcommands + Rich UI
-│   ├── stt.py           # Prisma v3.0 REST STT wrapper
-│   ├── stt_realtime.py  # Prisma v3.0 Realtime WebSocket STT
-│   ├── tts.py           # Timbre v3.0 REST TTS wrapper + expression tag injection
-│   ├── tts_stream.py    # Timbre v3.0 SSE streaming TTS
-│   ├── llm.py           # Reasoning router (Evon if available, else local)
-│   ├── local_debug.py   # Static analyser + stack trace summariser
-│   ├── context.py       # Dynamic workspace keyterm extractor
-│   ├── record.py        # Mic recording with ASCII waveform (Rich)
-│   └── __init__.py      # Version + startup banner
-├── examples/
-│   ├── null_check.py
-│   ├── off_by_one.js
-│   ├── bare_except.py
-│   ├── hardcoded_secret.py
-│   ├── unclosed_file.py
-│   ├── mutable_default.py
-│   └── README.md        # Suggested Hinglish questions for each example
-├── test_api.py          # Pipeline test (stage by stage, no audio required)
-├── pyproject.toml       # Package config — installs devsuno + voicepair commands
+│   ├── cli.py            7 subcommands + Rich terminal UI
+│   ├── stt.py            Prisma v3.0 REST STT
+│   ├── stt_realtime.py   Prisma v3.0 WebSocket STT  (--live)
+│   ├── tts.py            Timbre v3.0 REST TTS + expression tags
+│   ├── tts_stream.py     Timbre v3.0 SSE streaming TTS
+│   ├── llm.py            Reasoning router (Evon when available, else local)
+│   ├── local_debug.py    7 bug pattern checks + trace summariser
+│   ├── fixer.py          Auto-write fixes to source files
+│   ├── watcher.py        File-save watcher (watchdog)
+│   ├── context.py        Dynamic workspace keyterm extractor
+│   ├── record.py         Mic recording with ASCII waveform
+│   └── __init__.py       Version + startup banner
+├── examples/             6 buggy files with Hinglish questions
+├── server.py             Web demo server (FastAPI)
+├── render.yaml           One-click Render deployment
+├── test_api.py           Pipeline test (no audio required)
+├── pyproject.toml        Package config
 ├── requirements.txt
-├── .env.example         # Copy to .env, add your Gnani API key
-└── .gitignore           # .env and out/ are gitignored
+├── .env.example          Copy to .env, add GNANI_API_KEY
+└── PITCH.md              One-page solution pitch
 ```
 
 ---
 
-## A Note on the Reasoning Layer
+## Deploy Web Demo (free, 5 min)
 
-The local static analyser is not a placeholder — it runs real checks and finds real bugs. The demo is built around the 6 patterns above.
+1. Go to [render.com](https://render.com) → New Web Service
+2. Connect `BhoomiNayak/DevSuno`
+3. Render auto-detects `render.yaml`
+4. Add env var: `GNANI_API_KEY` = your key
+5. Deploy → public URL ready
 
-**Evon** (Gnani's own 30B reasoning model) is not on the public API platform as of November 2026 — it's open-weight on Hugging Face and available via private endpoint only. The slot is built: set `EVON_API_URL` in `.env` and Evon takes over automatically with no other change.
+---
+
+## On the Reasoning Layer
+
+The local static analyser runs real checks and finds real bugs in the 7 patterns above.
+
+**Evon** (Gnani's own 30B model) is open-weight on Hugging Face and not on the public API platform as of November 2026. The slot is built — set `EVON_API_URL` in `.env` and Evon activates automatically with no other change.
+
+---
+
+## Real-World Impact
+
+Millions of Indian developers think in Hinglish and type in English. DevSuno meets them in the language they actually use — in the terminal where they actually work.
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE).
 
 ---
 
-*Built with ❤️ for the Gnani Great Indian AI Internship Challenge.*
-*Gnani Prisma v3 STT + Timbre v3 TTS — because Indian developers deserve tools that speak their language.*
+*Built entirely on Gnani Prisma v3.0 STT + Gnani Timbre v3.0 TTS.*
+*Because Indian developers deserve tools that speak their language.*
